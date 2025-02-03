@@ -2,7 +2,7 @@
 
 ### Make sure Streamlit is installed:
 ```bash
-pip install foobar
+pip install streamlit
 ```
 
 
