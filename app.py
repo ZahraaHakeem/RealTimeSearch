@@ -1,46 +1,26 @@
-import streamlit as st
-import pandas as pd
-import json
-from search_system import combine_search_results  
+from duckduckgo_search import DDGS
+from moecolor import print
+from moecolor import FormatText as ft
+from typing import List, Dict
 
-def load_api_keys(config_file='config.json'):
-    with open(config_file, 'r') as f:
-        config = json.load(f)
-    return config
+def search_duckduckgo(query):
+    seen_urls = set()
+    search = DDGS()
+    results = search.text(query)
+    duckduckgo_results = []
+    for item in results[:5]:  
+        url = item['href']
+        if url not in seen_urls:
+            seen_urls.add(url)
+            duckduckgo_results.append({
+                'title': item['title'],
+                'url': url,
+                'snippet': item['body']
+            })
+    return duckduckgo_results
 
-keys = load_api_keys()
-api_key = keys.get('API_KEY')
-cx = keys.get('CX')
-
-st.title("Search Results Viewer")
-query = st.text_input("Enter your search query:", key="search_query_input")
-
-trusted_domains = ['.edu', '.gov', '.net', '.org', '.com']
-
-if query and api_key and cx:
-    results = combine_search_results(query, api_key, cx, trusted_domains)
-    if results:
-        # Display Google results first
-        st.markdown("# Google Search Results")
-        google_results = results[:5] 
-        for idx, result in enumerate(google_results, 1):
-            st.subheader(f"{result['title']}")
-            st.write(f"[{result['url']}]({result['url']})")
-            st.write(f"{result['snippet']}")
-            st.markdown("---")
-        
-        # Display DuckDuckGo results
-        st.markdown("# DuckDuckGo Search Results")
-        duckduckgo_results = results[5:10]  
-        for idx, result in enumerate(duckduckgo_results, 1):
-            st.subheader(f"{result['title']}")
-            st.write(f"[{result['url']}]({result['url']})")
-            st.write(f"{result['snippet']}")
-            st.markdown("---")
-
-        df = pd.DataFrame(results, columns=['title', 'url', 'snippet'])
-        st.markdown("### Results DataFrame")
-        st.dataframe(df)
-
-else:
-    st.write("Please enter a search query.")
+results: List[Dict] = search_duckduckgo(input(ft("Enter your search query: ", color='yellow').text))
+for result in results:
+    for k, v in result.items():
+        print(f"{ft(k, color='green')}: {v}")
+    print("*" * 75)
