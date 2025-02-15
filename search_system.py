@@ -1,52 +1,59 @@
+import os
 import requests
-from urllib.parse import urlparse
+import serpapi
+from dotenv import load_dotenv
 from duckduckgo_search import DDGS
+from moecolor import print
+from moecolor import FormatText as ft
 
-def process_search_results(data, trusted_domains, seen_urls):
-    results = []
-    if 'items' in data:
-        for item in data['items']:  
-            url = item['link']
-            if url.startswith(('https://', 'www.')):  
-                parsed_url = urlparse(url)
-                domain = parsed_url.netloc.lower() 
+# Load API key from .env
+load_dotenv()
+serp_api_key = os.getenv("SERP_API_KEY")
+news_api_key = os.getenv("NEWS_API_KEY")
 
-                if any(domain.endswith(trusted_domain) for trusted_domain in trusted_domains) and url not in seen_urls:
-                    seen_urls.add(url)
-                    results.append({
-                        'title': item['title'],
-                        'url': url,
-                        'snippet': item.get('snippet', 'No snippet available')
-                    })
-    return results
+def search_duckduckgo(query, limit=10):
+    results = DDGS().text(query)
+    return [{"Title": item["title"], "URL": item["href"], "Snippet": item["body"]} for item in results[:limit]] or \
+           [{"Title": "No results found.", "URL": "", "Snippet": ""}]
 
-def search_google(query, api_key, cx, trusted_domains, seen_urls):
-    url = f"https://www.googleapis.com/customsearch/v1?q={query}&key={api_key}&cx={cx}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        return process_search_results(data, trusted_domains, seen_urls)  
-    else:
-        return []
 
-def search_duckduckgo(query, seen_urls):
-    search = DDGS()
-    results = search.text(query)
-    duckduckgo_results = []
-    for item in results[:5]:  
-        url = item['href']
-        if url not in seen_urls:
-            seen_urls.add(url)
-            duckduckgo_results.append({
-                'title': item['title'],
-                'url': url,
-                'snippet': item['body']
-            })
-    return duckduckgo_results
+def fetch_news(api_key, query, page_size=10):
+    url = "https://newsapi.org/v2/everything"
+    params = {"apiKey": api_key, "q": query, "pageSize": page_size, "sortBy": "relevancy"}
+    news_results = requests.get(url, params=params).json().get("articles", [])
+    return [{"Title": article.get("title", "No title available"), "URL": article.get("url", ""), 
+             "Snippet": article.get("description", "No description available")} for article in news_results] or \
+           [{"Title": "No relevant news articles found.", "URL": "", "Snippet": ""}]
 
-def combine_search_results(query, api_key, cx, trusted_domains):
-    seen_urls = set()  # don't allow duplicates URLs
-    google_results = search_google(query, api_key, cx, trusted_domains, seen_urls)
-    duckduckgo_results = search_duckduckgo(query, seen_urls)
-    combined_results = google_results + duckduckgo_results
-    return combined_results
+
+
+query = input(ft("Enter your search query: ", color='yellow').text)
+
+for source, results in [
+    ("🔍 DuckDuckGo", search_duckduckgo(query)),
+    ("📰 NewsAPI", fetch_news(news_api_key, query))]:
+    
+    print(ft(f"\n{source} Results for: {query}", color="blue"))
+    for i, result in enumerate(results, 1):
+        print(f"{ft(str(i), color='green')}. {ft('Title:', color='cyan')} {ft(result['Title'], color='yellow')}\n"
+              f"   {ft('URL:', color='cyan')} {result['URL']}\n"
+              f"   {ft('Snippet:', color='cyan')} {result['Snippet']}\n")
+
+
+
+
+
+
+
+# def search_bing_serpapi(query, limit=10):
+#     if not serp_api_key:
+#         return [{"Title": "Missing SerpAPI Key.", "URL": "", "Snippet": "Set SERP_API_KEY in .env"}]
+    
+#     try:
+#         client = serpapi.Client(api_key=serp_api_key)
+#         results = client.search({'engine': 'bing', 'q': query}).get("organic_results", [])
+#         return [{"Title": res.get("title", "No title"), "URL": res.get("link", ""), 
+#                  "Snippet": res.get("snippet", "No snippet")} for res in results[:limit]] or \
+#                [{"Title": "No results found.", "URL": "", "Snippet": ""}]
+#     except Exception as e:
+#         return [{"Title": "SerpAPI Error", "URL": "", "Snippet": str(e)}]
