@@ -1,22 +1,25 @@
 import os
 import requests
-import serpapi
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
 from moecolor import print
 from moecolor import FormatText as ft
+import json
 
-# Load API key from .env
+
 load_dotenv()
-serp_api_key = os.getenv("SERP_API_KEY")
 news_api_key = os.getenv("NEWS_API_KEY")
+serper_api_key = os.getenv("SERPER_KEY")
 
+# Function to search using DuckDuckGo
 def search_duckduckgo(query, limit=10):
     results = DDGS().text(query)
     return [{"Title": item["title"], "URL": item["href"], "Snippet": item["body"]} for item in results[:limit]] or \
            [{"Title": "No results found.", "URL": "", "Snippet": ""}]
 
 
+
+# Function to fetch news using NewsAPI
 def fetch_news(api_key, query, page_size=10):
     url = "https://newsapi.org/v2/everything"
     params = {"apiKey": api_key, "q": query, "pageSize": page_size, "sortBy": "relevancy"}
@@ -27,11 +30,37 @@ def fetch_news(api_key, query, page_size=10):
 
 
 
+# Function to fetch Google search results using Serper API
+def search_serper(api_key, query, limit=20):
+    url = "https://google.serper.dev/search"
+    payload = json.dumps({"q": query , "num": limit})
+    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+    response = requests.request("POST", url, headers=headers, data=payload)
+    data = response.json()
+    results = []
+    if "organic" in data:
+        results = [{"Title": item["title"], "URL": item["link"], "Snippet": item.get("snippet", "No description available")}
+                   for item in data["organic"][:limit]]
+    knowledge_graph = fetch_knowledge_graph_with_serper(data)
+    return results or [{"Title": "No search results found.", "URL": "", "Snippet": ""}], knowledge_graph
+
+
+# Function to fetch Knowledge Graph Google search results using Serper API
+def fetch_knowledge_graph_with_serper(data):
+    if "knowledgeGraph" in data and data["knowledgeGraph"]:
+        return data["knowledgeGraph"]
+    return None 
+
+
 query = input(ft("Enter your search query: ", color='yellow').text)
+google_results, knowledge_graph = search_serper(serper_api_key, query)
+
 
 for source, results in [
     ("🔍 DuckDuckGo", search_duckduckgo(query)),
-    ("📰 NewsAPI", fetch_news(news_api_key, query))]:
+    ("📰 NewsAPI", fetch_news(news_api_key, query)),
+    ("🌐 Google (Serper)", google_results)
+    ]:
     
     print(ft(f"\n{source} Results for: {query}", color="blue"))
     for i, result in enumerate(results, 1):
@@ -40,20 +69,12 @@ for source, results in [
               f"   {ft('Snippet:', color='cyan')} {result['Snippet']}\n")
 
 
-
-
-
-
-
-# def search_bing_serpapi(query, limit=10):
-#     if not serp_api_key:
-#         return [{"Title": "Missing SerpAPI Key.", "URL": "", "Snippet": "Set SERP_API_KEY in .env"}]
-    
-#     try:
-#         client = serpapi.Client(api_key=serp_api_key)
-#         results = client.search({'engine': 'bing', 'q': query}).get("organic_results", [])
-#         return [{"Title": res.get("title", "No title"), "URL": res.get("link", ""), 
-#                  "Snippet": res.get("snippet", "No snippet")} for res in results[:limit]] or \
-#                [{"Title": "No results found.", "URL": "", "Snippet": ""}]
-#     except Exception as e:
-#         return [{"Title": "SerpAPI Error", "URL": "", "Snippet": str(e)}]
+if knowledge_graph:
+    print(ft("\n🎯 Knowledge Graph Information 🎯", color="magenta"))
+    for key, value in knowledge_graph.items():
+        if key == "attributes":
+            print(ft("\n📌 Additional Details:", color="cyan"))
+            for attr_key, attr_value in value.items():
+                print(f"  - {ft(attr_key, color='yellow')}: {attr_value}")
+        else:
+            print(f"{ft(key.capitalize(), color='green')}: {value}")
