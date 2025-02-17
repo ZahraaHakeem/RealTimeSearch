@@ -5,11 +5,14 @@ from duckduckgo_search import DDGS
 from moecolor import print
 from moecolor import FormatText as ft
 import json
+from serpapi import GoogleSearch
+
 
 
 load_dotenv()
 news_api_key = os.getenv("NEWS_API_KEY")
 serper_api_key = os.getenv("SERPER_KEY")
+serp_api = os.getenv("SERP_API_KEY")
 
 # Function to search using DuckDuckGo
 def search_duckduckgo(query, limit=10):
@@ -52,14 +55,29 @@ def fetch_knowledge_graph_with_serper(data):
     return None 
 
 
+
+# Function to search Bing using SerpAPI
+def search_bing_serpapi(api_key, query, limit=10):
+    params = {"engine": "bing","q": query,"api_key": api_key}
+    search = GoogleSearch(params)
+    results = search.get_dict()
+    if "organic_results" in results:
+        return [{"Title": item["title"], "URL": item["link"], "Snippet": item.get("snippet", "No description available")}
+                for item in results["organic_results"][:limit]]
+    return [{"Title": "No Bing search results found.", "URL": "", "Snippet": ""}]
+
+
+
 query = input(ft("Enter your search query: ", color='yellow').text)
 google_results, knowledge_graph = search_serper(serper_api_key, query)
+bing_results = search_bing_serpapi(serp_api, query)
 
 
 for source, results in [
     ("🔍 DuckDuckGo", search_duckduckgo(query)),
     ("📰 NewsAPI", fetch_news(news_api_key, query)),
-    ("🌐 Google (Serper)", google_results)
+    ("🌐 Google (Serper)", google_results),
+     ("📢 Bing (SerpAPI)", bing_results)
     ]:
     
     print(ft(f"\n{source} Results for: {query}", color="blue"))
